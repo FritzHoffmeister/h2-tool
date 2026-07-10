@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>H2-Flugzeug Business Case — Interaktiv (G3)</title>
+<!-- G3-Stand 2026-07-10: deterministischer Ein-Welt-Port von model_v4.py + model_v5_stufen.py.
+     DREI CASES: A (19 PAX, GH2, Prop-Komparator ohne Mandat) · B (75 PAX, LH2, = v4)
+     · C (110 PAX Kurzstrecke, LH2 + c_emalus, Margen-Ramp statt Lernkurve).
+     Verifiziert gegen Python (Basiswelt = Modus je Dreieck, u=0,5, z=15 %, 45V-Ende 2041):
+     A -0,588 (dev ab 2027, Basisjahr 2027) · B -5,459 (2028/2028) · C -6,181 (2032/2027).
+     KEIN Monte Carlo: P(NPV>0)=0 % steht im Deep-Dive v2.1 (20.000 Welten). -->
+<style>
+ :root{--bg:#0f1216;--card:#181d24;--ink:#e8ecf1;--mut:#9aa7b4;--acc:#1f77b4;--good:#27ae60;--bad:#c0392b;--warn:#e8a13a}
+ *{box-sizing:border-box} html,body{height:100%}
+ body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+ header{padding:12px 22px;border-bottom:1px solid #262c35;flex:0 0 auto} h1{font-size:18px;margin:0} .sub{color:var(--mut);font-size:12px;margin-top:3px;max-width:1100px}
+ .wrap{display:grid;grid-template-columns:350px 1fr;gap:16px;padding:12px 22px;flex:1 1 auto;min-height:0}
+ .colL,.colR{overflow-y:auto;min-height:0;scrollbar-width:thin} .colL{padding-right:3px}
+ @media(max-width:940px){body{display:block;height:auto;overflow:auto}.wrap{grid-template-columns:1fr}.colL,.colR{overflow:visible}}
+ .card{background:var(--card);border:1px solid #262c35;border-radius:10px;padding:13px 15px;margin-bottom:13px}
+ .card h2{font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 8px}
+ label{display:block;margin:9px 0 2px;font-size:12px;color:var(--mut)} label b{color:var(--ink);float:right;font-variant-numeric:tabular-nums}
+ label.out{color:var(--warn)} label.out b{color:var(--warn)}
+ input[type=range]{width:100%;accent-color:var(--acc)}
+ .presets,.casetabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+ .presets button,.casetabs button{flex:1 1 45%;background:#222833;color:var(--ink);border:1px solid #333c49;border-radius:7px;padding:7px 4px;cursor:pointer;font-size:11.5px}
+ .casetabs button{flex:1 1 30%;font-weight:600}
+ .presets button:hover,.casetabs button:hover{border-color:var(--acc)}
+ .casetabs button.act{background:var(--acc);border-color:var(--acc)}
+ .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;margin-bottom:12px} @media(max-width:1250px){.kpis{grid-template-columns:repeat(3,1fr)}}
+ .kpi{background:var(--card);border:1px solid #262c35;border-radius:10px;padding:10px 12px}
+ .kpi .v{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums} .kpi .l{font-size:10.5px;color:var(--mut);margin-top:2px}
+ .pos{color:var(--good)} .neg{color:var(--bad)} .amb{color:var(--warn)}
+ canvas{width:100%;background:#12161c;border-radius:8px;border:1px solid #262c35}
+ .note{font-size:11px;color:var(--mut);margin-top:7px}
+ .verdict{padding:10px 12px;border-radius:8px;font-weight:600;margin-bottom:12px;font-size:13.5px}
+ .chip{display:inline-block;background:#1a2230;border:1px solid #2b3a52;color:#9fc1e8;border-radius:7px;padding:6px 10px;font-size:11.5px;margin-bottom:12px}
+ footer{padding:12px 2px 8px;color:var(--mut);font-size:11px;border-top:1px solid #262c35;margin-top:4px}
+</style></head><body>
+<header><h1>🛩️ H2-Brennstoffzellen-Flugzeug — Business Case (OEM), interaktiv · <span style="color:#7fb3e0">G3</span></h1>
+<div class="sub"><b>Ein-Welt-Rechner</b> auf der Mechanik der auditierten Modelle (model_v4 + v5): <b>fünf Cases</b> —
+A1/A2/A3 (6–8/8–12/12–19 PAX, GH₂, ohne SAF-Mandat; R3-Stufung) · B (75 PAX, LH₂) · C (110 PAX Kurzstrecke, Margen-Ramp).
+<b>Nachfrage-Gate</b> Gl.&nbsp;(7)–(10), <b>Speed-Malus</b>, nichtlineare Anker-Pfade, 45V-Fenster, realer WACC.
+Regler außerhalb der auditierten Bänder werden <span style="color:var(--warn)">⚠ markiert</span>. Kein Monte Carlo — Wahrscheinlichkeiten im Deep-Dive v2.1.</div></header>
+<div class="wrap">
+ <div class="colL">
+  <div class="card"><h2>Flugzeug-Case</h2>
+   <div class="casetabs">
+    <button id="tabA1">A1 · 6–8</button><button id="tabA2">A2 · 8–12</button><button id="tabA3">A3 · 12–19</button><button id="tabB" class="act">B · 75 PAX</button><button id="tabC">C · 110</button>
+   </div><div class="note" id="caseNote"></div>
+  </div>
+  <div class="card"><h2>Szenario-Presets</h2>
+   <div class="presets">
+    <button id="pBase">Audit-Base (G3)</button><button id="pBest">Beste Bandränder</button>
+    <button id="pOil">Öl-Schock ×1,8 (O2)</button><button id="pPol">Politik-Push</button>
+   </div><div class="note">„Beste Bandränder" = alle Regler gleichzeitig am günstigen Audit-Rand — eine Joint-Ecke jenseits P99.</div>
+  </div>
+  <div class="card"><h2>Ebene A — Physik & Nachfrage-Gate</h2>
+   <div id="grpA"></div>
+   <div class="note" id="chainNote"></div>
+  </div>
+  <div class="card"><h2>Preise & Politik</h2><div id="grpP"></div></div>
+  <div class="card"><h2>Ebene B — OEM-Programm</h2><div id="grpB"></div>
+   <div class="note" id="deadNote" style="color:#e8a13a"></div>
+   <div class="note" id="fixNote"></div></div>
+ </div>
+ <div class="colR">
+  <div id="verdict" class="verdict"></div>
+  <span class="chip" id="mcChip"></span>
+  <div class="kpis">
+   <div class="kpi"><div class="v" id="kNPV">–</div><div class="l">NPV [Mrd $, real]</div></div>
+   <div class="kpi"><div class="v" id="kGate">–</div><div class="l">Nachfrage-Gate</div></div>
+   <div class="kpi"><div class="v" id="kAdv">–</div><div class="l">DOC-Vorteil adv(2050)</div></div>
+   <div class="kpi"><div class="v" id="kBE">–</div><div class="l">Disk. Break-even</div></div>
+   <div class="kpi"><div class="v" id="kPeak">–</div><div class="l">Peak Funding</div></div>
+   <div class="kpi"><div class="v" id="kUnits">–</div><div class="l">Absatz kumuliert</div></div>
+  </div>
+  <div class="card"><h2>Nachfrage-Gate: DOC-Vorteil adv(y) — kauft der Markt?</h2><canvas id="cAdv" width="840" height="215"></canvas>
+   <div class="note" id="gNote"></div></div>
+  <div class="card"><h2>J-Kurve — kumulierter Cashflow [Mrd $]: nominal (grau) · <b>diskontiert</b> (farbig, Endpunkt = NPV — reagiert auf WACC)</h2><canvas id="cJ" width="840" height="235"></canvas></div>
+  <div class="card"><h2 id="cATitle">Kosten je Sitz-km 2050 [ct/ASK]</h2><canvas id="cA" width="840" height="185"></canvas>
+   <div class="note" id="aNote"></div></div>
+  <footer><b style='color:#c8d4e0'>Studie: Fritz Hoffmeister</b> — Initiator, Studienleitung &amp; kritisches Review · Modellierung &amp; Umsetzung KI-gestützt (Claude, Anthropic), alle tragenden Zahlen auditiert &amp; reproduzierbar<br>G3-Freeze 2026-07-10 · Ein-Welt-Port von model_v4.py + model_v5_stufen.py, verifiziert gegen Python:
+Basiswelt A1 −0,46 · A2 −0,59 · A3 −0,59 · B −5,46 · C −6,18 (Konventionen wie im Modell: dev ab 2027/2028/2032, Basisjahr 2027/2028/2027) ·
+Vereinfachungen: H2-/e-SAF-/GH₂-Pfade über auditierte Anker mit gemeinsamem Strom-Regler; Bio-SAF base ·
+Quellen, Formeln, MC-Bänder &amp; Audits: Deep-Dive v2.1 + Gate-Analyse v1.1 · Modellrechnung, keine Anlageberatung.</footer>
+ </div>
+</div>
+<script>
+/*==MODEL-START== originalgetreuer Port von model_v4.py + model_v5_stufen.py ==*/
+const YE=[2026,2030,2040,2050];
+const ANCH={
+ jet  :{lo:[640,620,660,700],      ba:[800,780,860,950],      hi:[1150,1100,1200,1300]},
+ h2EU :{lo:[9.2,7.0,4.5,2.7],      ba:[10.3,8.5,6.3,4.5],     hi:[11.3,10.3,8.1,7.0]},
+ h2US :{lo:[6.9,5.3,3.2,1.9],      ba:[8.0,6.5,4.5,3.0],      hi:[8.8,7.9,5.8,4.7]},
+ gh2EU:{lo:[6.24,4.97,3.47,2.19],  ba:[8.02,6.42,4.66,3.11],  hi:[10.64,8.72,6.56,4.60]},  // Produktion VOR Trailer/45V (aus S.gh2_net extrahiert)
+ gh2US:{lo:[4.29,3.22,1.95,1.01],  ba:[5.70,4.40,2.85,1.60],  hi:[7.95,6.29,4.32,2.73]},
+ bsaf :{lo:[2300,2200,2100,2000],  ba:[2600,2650,2750,2900],  hi:[3000,3300,3900,4500]},
+ esaf :{lo:[4200,2800,1800,1300],  ba:[5000,3400,2400,1900],  hi:[6000,4400,3400,2900]},
+ co2  :{lo:[87,81,119,140],        ba:[87,124,162,216],       hi:[87,162,324,594]}};
+const W_REGION={EU:.45,US:.25,CN:.20,UK:.10}, CO2_SCALE={EU:1,UK:.9,CN:.3,US:0};
+const LHV={jet:43,saf:44,lh2:120}, CO2F={jet:3.16,saf:.632,esaf:.316}, E_ASK=.95, ETA_JET=.40;
+const PC={A1:{ds:2027,by:2027,penCap:.25,af:8,pkw:850,margin:false},
+          A2:{ds:2027,by:2027,penCap:.35,af:9,pkw:1150,margin:false},
+          A3:{ds:2027,by:2027,penCap:.45,af:11.5,pkw:1200,margin:false},
+          B:{ds:2028,by:2028,penCap:.45,af:82,pkw:4700,margin:false},
+          C:{ds:2032,by:2027,penCap:.38,margin:true}};
+function interp(y,xs,vs){if(y<=xs[0])return vs[0];for(let i=1;i<xs.length;i++){if(y<=xs[i])return vs[i-1]+(vs[i]-vs[i-1])*(y-xs[i-1])/(xs[i]-xs[i-1]);}return vs[vs.length-1];}
+function path(n,y,u){const A=ANCH[n],lo=interp(y,YE,A.lo),ba=interp(y,YE,A.ba),hi=interp(y,YE,A.hi);return u<=.5?lo+(ba-lo)*(u/.5):ba+(hi-ba)*((u-.5)/.5);}
+function safQ(y){const T=[[2050,.70],[2045,.42],[2040,.34],[2035,.20],[2030,.06],[2025,.02]];for(const[t,q]of T)if(y>=t)return q;return 0;}
+function esafQ(y){const T=[[2050,.35],[2045,.15],[2040,.10],[2035,.05],[2034,.02],[2032,.012],[2030,.007]];for(const[t,q]of T)if(y>=t)return q;return 0;}
+function ira45v(y,end){return 3.185*Math.min(1,Math.max(0,(end-y)/3));}
+function fckw(y,u){const xs=[2028,2030,2040,2050],lo=interp(y,xs,[400,280,210,160]),ba=interp(y,xs,[650,460,310,240]),hi=interp(y,xs,[1000,800,470,360]);return u<=.5?lo+(ba-lo)*(u/.5):ba+(hi-ba)*((u-.5)/.5);}
+function lh2net(y,r,g){let v=path(r==="US"?"h2US":"h2EU",y,g.u_h2);if(r==="US")v=Math.max(.5,v-ira45v(y,g.v45));return v;}
+function gh2net(y,r,g){let v=path(r==="US"?"gh2US":"gh2EU",y,g.u_h2)+g.a_trailer;if(r==="US")v=Math.max(.5,v-ira45v(y,g.v45));return v;}
+function costJet(y,r,g,mandate){ // Kerosin(+Pflicht-SAF wenn Mandat) inkl. CO2 [ct/ASK]; Quote nur EU/UK
+ const kj=(E_ASK/ETA_JET)/LHV.jet,ks=(E_ASK/ETA_JET)/LHV.saf;
+ const q=(mandate&&(r==="EU"||r==="UK"))?safQ(y):0, qe=q>0?Math.min(esafQ(y),q):0;
+ const pb=path("bsaf",y,.5), pe=path("esaf",y,g.u_h2);
+ const ps=q>0?(qe*pe+(q-qe)*Math.min(pb,pe))/q:0;
+ const fuel=(1-q)*kj*path("jet",y,g.u_jet)*g.mult/1000+q*ks*ps/1000;
+ const fr=pe<pb?CO2F.esaf:CO2F.saf;
+ const co2=((1-q)*kj*CO2F.jet+(qe*CO2F.esaf+(q-qe)*fr)*ks)/1000*path("co2",y,g.u_co2)*CO2_SCALE[r];
+ return (fuel+co2)*100;}
+function costH2(y,r,g,c){
+ if(c.charAt(0)==="A") return (E_ASK/(g.eta_fc*g.eta_mp))/LHV.lh2*gh2net(y,r,g)*100;
+ const em=c==="C"?g.c_emalus:1.0;
+ return (E_ASK*em/(g.eta_fc*g.eta_mp))/LHV.lh2*lh2net(y,r,g)*100;}
+function adv(y,g,c){let a=0;const man=c.charAt(0)!=="A";
+ for(const r in W_REGION)a+=W_REGION[r]*(g.fshare*(1-costH2(y,r,g,c)/costJet(y,r,g,man))-g.smalus);
+ return a;}
+function run(g,c){
+ const P=PC[c],y0=P.ds,y1=2060,devEff=g.dev*(1-g.grant)*1000,nDev=g.eis-y0,span=Math.max(1,2055-g.eis);
+ const b=P.margin?0:Math.log(g.learn)/Math.log(2);
+ const A=[];for(let y=g.eis;y<=2055;y++)A.push(adv(y,g,c));
+ const advPos=A.reduce((s,v)=>s+Math.max(v,0),0)/A.length;
+ const gate=Math.min(1,Math.max(0,advPos/g.thr)), penT=Math.min(g.pen,P.penCap)*gate;
+ let cum=0,cumU=0,peak=0,dcum=0,npv=0,be=null;const yrs=[],cumA=[],dcumA=[];
+ for(let y=y0;y<=y1;y++){
+  let f=0;
+  if(y<g.eis)f-=devEff/nDev;
+  let rate=0;
+  if(y>=g.eis){const pen=penT*Math.pow(Math.min(1,(y-g.eis)/span),1.4);rate=Math.min(g.cap,g.mkt*Math.pow(1.015,y-g.eis)*pen);}
+  const nmid=Math.max(1,cumU+rate/2);cumU+=rate;
+  if(rate>0){
+   if(P.margin){const m=g.c_m0+(g.c_m1-g.c_m0)*Math.min(1,Math.max(0,(y-g.eis)/g.c_ramp));f+=m*rate;}
+   else{const uc=P.af*Math.pow(nmid,b)+P.pkw*fckw(y,g.u_fckw)/1e6,pr=g.price0*Math.pow(.99,y-g.eis);f+=(pr-uc)*rate;}}
+  cum+=f;if(cum<peak)peak=cum;
+  const d=f/Math.pow(1+g.wacc,y-P.by);npv+=d;dcum+=d;
+  if(be===null&&dcum>=0&&y>g.eis)be=y;
+  yrs.push(y);cumA.push(cum);dcumA.push(dcum);
+ }
+ return{yrs,cumA,dcumA,npv:npv/1000,gate,penT,advPos,advA:A,peak:peak/1000,units:cumU,be,adv50:adv(2050,g,c)};}
+/*==MODEL-END==*/
+
+// ── UI ────────────────────────────────────────────────────────────────────
+const $=id=>document.getElementById(id);
+const fmt2=v=>v.toFixed(2),fmt0=v=>v.toFixed(0),pct=v=>(v*100).toFixed(0)+" %",pct1=v=>(v*100).toFixed(1)+" %";
+let CUR="B";
+// Slider-Spezifikation: pro Case [min,max,step, base, bandLo, bandHi] oder null (ausblenden). dir = günstige Richtung.
+const SPEC=[
+ ["eta_fc","A","η Brennstoffzelle",fmt2,+1,{A:[.36,.62,.01,.50,.40,.60],B:"A",C:"A"}],
+ ["eta_mp","A","η E-Motor + Propeller",fmt2,+1,{A:[.70,.94,.01,.85,.75,.90],B:"A",C:"A"}],
+ ["fshare","A","Fuel-Anteil an DOC f_share",pct,+1,{A:[.15,.45,.01,.28,.20,.40],A1:[.08,.35,.01,.18,.12,.28],A2:[.10,.38,.01,.22,.15,.32],B:[.18,.45,.01,.30,.25,.35],C:[.18,.40,.01,.28,.22,.34]}],
+ ["smalus","A","Speed-Malus s (Gl. 10)",pct1,-1,{A:[0,.06,.005,0,0,.02],A1:[0,.08,.005,.02,0,.05],A2:[0,.06,.005,.01,0,.03],B:[0,.20,.005,.08,.03,.14],C:[0,.25,.005,.11,.07,.16]}],
+ ["c_emalus","A","Energie-Malus Cooling/Vol. ×",fmt2,-1,{A:null,B:null,C:[1.0,1.3,.01,1.12,1.05,1.20]}],
+ ["thr","A","Gate-Schwelle θ",pct1,-1,{A:[.02,.10,.005,.05,.03,.08],B:"A",C:"A"}],
+ ["u_h2","P","H2- & e-SAF-Pfad (Strom): günstig↔teuer",v=>path(CUR==="A"?"gh2EU":"h2EU",2050,v).toFixed(2)+" $/kg ('50 EU)",-1,{A:[0,1,.05,.5,0,1],B:"A",C:"A"}],
+ ["a_trailer","P","GH₂-Trailer-Aufschlag [$/kg] 🟡",fmt2,-1,{A:[.5,10,.25,2.5,1.0,8.0],B:null,C:null}],
+ ["u_jet","P","Kerosinpfad: günstig↔teuer",v=>path("jet",2050,v).toFixed(0)+" $/t ('50)",+1,{A:[0,1,.05,.5,0,1],B:"A",C:"A"}],
+ ["mult","P","Öl-Schock ×Kerosin (O2-Stress-Ast)",v=>"×"+v.toFixed(2),+1,{A:[1,2.5,.05,1,1,1],B:"A",C:"A"}],
+ ["u_co2","P","CO2-Pfad: niedrig↔Fat-Tail",v=>path("co2",2050,v).toFixed(0)+" $/t ('50 EU)",+1,{A:[0,1,.05,.5,0,1],B:"A",C:"A"}],
+ ["v45","P","IRA-45V-Ende (US)",fmt0,+1,{A:[2038,2052,1,2041,2038,2044],B:"A",C:"A"}],
+ ["dev","B","Entwicklung dev [Mrd $]",v=>v.toFixed(1),-1,{A:[.2,2.5,.05,.8,.4,1.5],A1:[.15,2,.05,.6,.3,1.2],A2:[.2,2.2,.05,.8,.4,1.4],B:[5,20,.5,10,7,16],C:[10,36,.5,17,14,32]}],
+ ["grant","B","F&E-Kofinanzierung z",pct,+1,{A:[0,.5,.05,.15,0,.35],B:"A",C:"A"}],
+ ["eis","B","Markteintritt EIS",fmt0,-1,{A:[2029,2038,1,2032,2030,2037],A1:[2028,2037,1,2031,2029,2035],A2:[2029,2038,1,2032,2030,2036],B:[2038,2048,1,2042,2040,2047],C:[2041,2053,1,2047,2043,2052]}],
+ ["price0","B","Realpreis p0 [Mio $]",fmt0,+1,{A:[6,18,.5,10,8,14],A1:[4,14,.5,8,6,11],A2:[5,16,.5,9,7,13],B:[24,58,1,34,26,45],C:null}],
+ ["c_m0","B","FOAK-Marge m0 [Mio $/Stück]",v=>v.toFixed(1),+1,{A:null,B:null,C:[-15,-5,.5,-10,-12,-8]}],
+ ["c_m1","B","Reife Marge m1 [Mio $/Stück]",v=>v.toFixed(1),+1,{A:null,B:null,C:[-4,10,.5,4.5,-2,8]}],
+ ["c_ramp","B","Margen-Ramp [Jahre]",fmt0,-1,{A:null,B:null,C:[8,18,.5,13.5,12,15]}],
+ ["mkt","B","Segmentmarkt M0 [E/J]",fmt0,+1,{A:[10,80,5,35,20,55],A1:[40,180,5,95,60,140],A2:[35,160,5,90,50,130],B:[60,220,5,130,95,165],C:[50,200,5,109,72,156]}],
+ ["pen","B","Penetration (gezogen)",pct,+1,{A:[.05,.50,.01,.22,.10,.35],A1:[.03,.35,.01,.12,.05,.25],A2:[.05,.40,.01,.18,.08,.30],B:[.05,.60,.01,.25,.08,.45],C:[.05,.50,.01,.20,.08,.38]}],
+ ["cap","B","Fertigungskapazität [E/J]",fmt0,+1,{A:[20,80,5,40,40,40],A1:[30,90,5,60,60,60],A2:[30,90,5,55,55,55],B:[40,120,5,70,50,90],C:[40,120,5,80,80,80]}],
+ ["learn","B","Wright-Lernrate",fmt2,-1,{A:[.80,.93,.005,.85,.82,.90],B:"A",C:null}],
+ ["u_fckw","B","FC-Kostenpfad $/kW: günstig↔teuer",v=>fckw(2040,v).toFixed(0)+" $/kW ('40)",-1,{A:[0,1,.05,.5,0,1],B:"A",C:null}],
+ ["wacc","B","WACC (real!)",pct1,-1,{A:[.05,.12,.001,.078,.063,.103],B:"A",C:"A"}],
+];
+function spec(id){return SPEC.find(s=>s[0]===id);}
+function rowFor(s,c){let r=s[5][c];if(r===undefined&&c.charAt(0)==="A")r=s[5]["A"];if(r==="A")r=s[5]["A"];return r;}   // "A" = wie Case A definiert
+const CASEMETA={
+ A1:{tab:"tabA1",note:"6–8 PAX (PC-12/TBM-Klasse), GH₂, ohne Mandat. ⚠ Audit F1: dev-Band gilt NUR Retrofit-STC (CS-23) — Clean-Sheet-H₂ dieser Größe rutscht durch die FC-Masse in CS-25 (BYA-1: 9,6 t MTOW). dev ab 2027, Deckel 25 %.",
+    chip:"📊 Auditierter MC (R3, 8.000 Welten): <b>A1 P50 −0,49 Mrd $ · P(NPV&gt;0) = 0 %</b> · diese Basiswelt: −0,46",
+    fix:"Fix (auditiert R3): Erststück 8 Mio $ · FC 850 kW · Kapazität 60/J · Deckel 25 % (Missions-Fit) · Erosion 1 %/J.",
+    dead:["price0","mkt","pen","cap","learn","u_fckw"]},
+ A2:{tab:"tabA2",note:"8–12 PAX (Caravan/King-Air-Klasse), GH₂, ohne Mandat. Größte Markt-Decke der A-Familie — hilft nichts bei geschlossenem Gate. dev ab 2027, Deckel 35 %.",
+    chip:"📊 Auditierter MC (R3, 8.000 Welten): <b>A2 P50 −0,58 Mrd $ · P(NPV&gt;0) = 0 %</b> · diese Basiswelt: −0,59",
+    fix:"Fix (auditiert R3): Erststück 9 Mio $ · FC 1.150 kW · Kapazität 55/J · Deckel 35 % · Erosion 1 %/J.",
+    dead:["price0","mkt","pen","cap","learn","u_fckw"]},
+ A3:{tab:"tabA3",note:"12–19 PAX (SkyCourier/Twin-Otter-Klasse) = bisheriger Case A, bit-identisch. GH₂ per Trailer, Komparator Turboprop OHNE SAF-Mandat (Kleinflugplätze 🟡). dev ab 2027.",
+    chip:"📊 Auditierter MC (20.000 Welten): <b>A3 = Case A P50 −0,59 Mrd $ · P(NPV&gt;0) = 0 %</b> · diese Basiswelt: −0,59",
+    fix:"Fix (auditiert): Erststück 11,5 Mio $ · FC 1.200 kW · Kapazität 40/J · Deckel 45 % · Erosion 1 %/J.",
+    dead:["price0","mkt","pen","cap","learn","u_fckw"]},
+ B:{tab:"tabB",note:"75 PAX, Brennstoffzelle, LH₂ at-pump, Komparator = Regionaljet MIT SAF-Mandat (EU/UK). = v4-Hauptmodell. dev ab 2028.",
+    chip:"📊 Auditierter MC (20.000 Welten, G3): <b>Case B P50 −5,0 Mrd $ · P(NPV&gt;0) = 0 %</b> · diese Basiswelt: −5,46",
+    fix:"Fix (auditiert): Erststück 82 Mio $ · FC 4.700 kW · Preiserosion 1 %/J · Wachstum 1,5 %/J · η_Jet 0,40 · E/ASK 0,95 MJ.",
+    dead:["price0","mkt","pen","cap","learn","u_fckw"]},
+ C:{tab:"tabC",note:"110 PAX Kurzstrecke (≤ ~1.000 nm), Brennstoffzelle, LH₂ + Cooling/Volumen-Malus, Speed-Malus zurück. Margen-RAMP statt Lernkurve (Audit F4). dev ab 2032, Deckel 38 %.",
+    chip:"📊 Auditierter MC (20.000 Welten): <b>Case C P50 −6,9 Mrd $ · P(NPV&gt;0) = 0 %</b> · diese Basiswelt: −6,18",
+    fix:"Fix (auditiert): Margen-Modell (FOAK-Verlust → reife Marge) · Wachstum 1,5 %/J · Kapazität 80/J · Missions-Filter im Markt enthalten.",
+    dead:["mkt","pen","cap","c_m0","c_m1","c_ramp"]},
+};
+function buildSliders(){
+ ["grpA","grpP","grpB"].forEach(g=>$(g).innerHTML="");
+ for(const s of SPEC){const r=rowFor(s,CUR);if(!r)continue;
+  $("grp"+s[1]).insertAdjacentHTML("beforeend",
+   `<label id="L${s[0]}">${s[2]} <b id="V${s[0]}"></b></label><input type="range" id="${s[0]}" min="${r[0]}" max="${r[1]}" step="${r[2]}" value="${r[3]}">`);
+  $(s[0]).addEventListener("input",draw);}
+ $("caseNote").textContent=CASEMETA[CUR].note;
+ $("mcChip").innerHTML=CASEMETA[CUR].chip;
+ $("fixNote").textContent=CASEMETA[CUR].fix;
+}
+function gval(){const g={};for(const s of SPEC){const r=rowFor(s,CUR);if(r)g[s[0]]=parseFloat($(s[0]).value);}return g;}
+function setCase(c){CUR=c;["tabA1","tabA2","tabA3","tabB","tabC"].forEach(t=>$(t).classList.remove("act"));$(CASEMETA[c].tab).classList.add("act");buildSliders();draw();}
+["A1","A2","A3","B","C"].forEach(c=>$("tab"+c).onclick=()=>setCase(c));
+function setAll(vals){for(const s of SPEC){const r=rowFor(s,CUR);if(!r)continue;$(s[0]).value=(s[0]in vals)?vals[s[0]]:r[3];}draw();}
+$("pBase").onclick=()=>setAll({});
+$("pBest").onclick=()=>{const v={};for(const s of SPEC){const r=rowFor(s,CUR);if(!r)continue;v[s[0]]=s[4]>0?r[5]:r[4];}v.mult=1;setAll(v);};
+$("pOil").onclick=()=>setAll({mult:1.8});
+$("pPol").onclick=()=>setAll({v45:2052,u_co2:1,u_h2:0});
+
+function draw(){
+ const g=gval();let out=0;
+ for(const s of SPEC){const r=rowFor(s,CUR);if(!r)continue;const v=g[s[0]],inB=v>=r[4]-1e-9&&v<=r[5]+1e-9;
+  $("V"+s[0]).textContent=s[3](v)+(inB?"":" ⚠");$("L"+s[0]).className=inB?"":"out";if(!inB)out++;}
+ $("chainNote").textContent=`η-Kette FC×Motor/Prop aktuell: ${(g.eta_fc*g.eta_mp).toFixed(3)} (auditiert real 0,41–0,44)`;
+ const r=run(g,CUR);
+ const DEAD=CASEMETA[CUR].dead,isDead=r.gate<1e-9;
+ DEAD.forEach(id=>{if($(id)){$("L"+id).style.opacity=isDead?".42":"1";$(id).style.opacity=isDead?".42":"1";}});
+ $("deadNote").textContent=isDead
+  ?"Gate 0 % → Absatz 0: die ausgegrauten Absatz-/Margenregler haben KEINE Wirkung — das ist Mauer 1 als Erlebnis, kein Bug. Gate öffnen: H2-Pfad günstig, Öl-Schock, s/θ senken."
+  :"Gate offen ("+(r.gate*100).toFixed(0)+" %) — die Absatzregler wirken jetzt. Beobachte: NPV bleibt trotzdem negativ (Mauer 2: Stückmarge).";
+ $("kNPV").textContent=(r.npv>=0?"+":"")+r.npv.toFixed(2);$("kNPV").className="v "+(r.npv>=0?"pos":"neg");
+ $("kGate").textContent=(r.gate*100).toFixed(0)+" %";$("kGate").className="v "+(r.gate>=.99?"pos":r.gate>0?"amb":"neg");
+ $("kAdv").textContent=(r.adv50*100).toFixed(1)+" %";$("kAdv").className="v "+(r.adv50>0?"pos":"neg");
+ $("kBE").textContent=r.be?r.be:"nie";$("kBE").className="v "+(r.be?"pos":"neg");
+ $("kPeak").textContent=r.peak.toFixed(1);$("kPeak").className="v neg";
+ $("kUnits").textContent=Math.round(r.units);
+ $("gNote").textContent=`Gate = clip(Ø max(adv,0) / θ) = clip(${(r.advPos*100).toFixed(2)} % / ${(g.thr*100).toFixed(1)} %) = ${(r.gate*100).toFixed(0)} % → wirksame Penetration ${(r.penT*100).toFixed(1)} % statt ${(Math.min(g.pen,PC[CUR].penCap)*100).toFixed(0)} %. Negative Jahre zählen nicht — der Markt kauft keinen Nachteil.`;
+ const v=$("verdict");
+ if(r.npv<0){v.textContent=`❌ NEGATIV (${r.npv.toFixed(2)} Mrd $) — deckt sich mit dem auditierten Befund: im MC erreicht keine der 20.000 Welten NPV > 0 (alle drei Cases).`;v.style.background="#3a1212";v.style.color="#e39a9a";}
+ else if(out>0){v.textContent=`⚠️ POSITIV — aber nur mit ${out} Regler(n) AUSSERHALB der auditierten Bänder. Im auditierten Parameterraum: P(NPV>0) = 0 %.`;v.style.background="#3a2c12";v.style.color="#e8c27f";}
+ else{v.textContent=`🟡 POSITIV in dieser Ein-Welt-Ecke — alle Regler im Band, aber GLEICHZEITIG günstige Ränder sind eine Joint-Ecke jenseits P99; der MC (mit Korrelationen, z. B. dev↔EIS +0,7) findet 0 % solcher Welten.`;v.style.background="#3a3512";v.style.color="#e8d97f";}
+ // adv(y)
+ {const cv=$("cAdv"),x=cv.getContext("2d"),W=cv.width,H=cv.height,pad=44;x.clearRect(0,0,W,H);
+  const A=r.advA,mn=Math.min(...A,-.02),mx=Math.max(...A,g.thr,.02);
+  const sx=i=>pad+i/(A.length-1)*(W-pad-12),sy=v=>H-26-(v-mn)/(mx-mn)*(H-40);
+  x.strokeStyle="#333c49";x.beginPath();x.moveTo(pad,sy(0));x.lineTo(W-12,sy(0));x.stroke();
+  x.strokeStyle="#4a5a2a";x.setLineDash([4,4]);x.beginPath();x.moveTo(pad,sy(g.thr));x.lineTo(W-12,sy(g.thr));x.stroke();x.setLineDash([]);
+  x.fillStyle="#9aa7b4";x.font="10px sans-serif";
+  x.fillText("0",pad-14,sy(0)+3);x.fillText("θ="+(g.thr*100).toFixed(0)+"%",W-58,sy(g.thr)-4);
+  x.fillText(String(g.eis),pad-8,H-8);x.fillText("2055",W-42,H-8);
+  x.fillText((mn*100).toFixed(0)+"%",pad-30,sy(mn)+3);x.fillText((mx*100).toFixed(0)+"%",pad-30,sy(mx)+3);
+  x.strokeStyle=A.some(v=>v>0)?"#e8a13a":"#c0392b";x.lineWidth=2.4;x.beginPath();
+  A.forEach((v,i)=>{const X=sx(i),Y=sy(v);i?x.lineTo(X,Y):x.moveTo(X,Y);});x.stroke();}
+ // J-Kurve
+ {const cv=$("cJ"),x=cv.getContext("2d"),W=cv.width,H=cv.height,pad=44;x.clearRect(0,0,W,H);
+  const N=r.cumA.map(v=>v/1000),D=r.dcumA.map(v=>v/1000);
+  const mn=Math.min(...N,...D),mx=Math.max(...N,...D,0.001);
+  const sx=i=>pad+i/(N.length-1)*(W-pad-12),sy=v=>H-26-(v-mn)/(mx-mn)*(H-40);
+  x.strokeStyle="#333c49";x.beginPath();x.moveTo(pad,sy(0));x.lineTo(W-12,sy(0));x.stroke();
+  x.fillStyle="#9aa7b4";x.font="10px sans-serif";
+  x.fillText("0",pad-14,sy(0)+3);x.fillText(mn.toFixed(1),pad-34,sy(mn)+3);x.fillText(mx.toFixed(1),pad-34,sy(mx)+3);
+  x.fillText(String(PC[CUR].ds),pad-8,H-8);x.fillText("2060",W-42,H-8);
+  x.strokeStyle="#5a6572";x.lineWidth=1.5;x.beginPath();
+  N.forEach((v,i)=>{const X=sx(i),Y=sy(v);i?x.lineTo(X,Y):x.moveTo(X,Y);});x.stroke();
+  x.fillStyle="#5a6572";x.fillText("nominal "+N[N.length-1].toFixed(1),W-118,sy(N[N.length-1])+12);
+  x.strokeStyle=r.npv>=0?"#27ae60":"#c0392b";x.lineWidth=2.4;x.beginPath();
+  D.forEach((v,i)=>{const X=sx(i),Y=sy(v);i?x.lineTo(X,Y):x.moveTo(X,Y);});x.stroke();
+  x.fillStyle=r.npv>=0?"#27ae60":"#c0392b";x.fillText("NPV "+r.npv.toFixed(2),W-118,sy(D[D.length-1])-6);}
+ // Kosten/ASK 2050
+ {const man=CUR!=="A";
+  $("cATitle").innerHTML="Kosten je Sitz-km 2050 [ct/ASK] — "+(man?"Blend (inkl. Quote+CO2)":"Kerosin OHNE Mandat (Kleinflugplatz)")+" vs. H2";
+  const cv=$("cA"),a=cv.getContext("2d"),W=cv.width,H=cv.height;a.clearRect(0,0,W,H);
+  const jl=man?"Blend":"Kerosin";
+  const bars=[["EU "+jl,costJet(2050,"EU",g,man),"#6b6b6b"],["EU H2",costH2(2050,"EU",g,CUR),"#1f77b4"],
+              ["US "+jl,costJet(2050,"US",g,man),"#8a8a8a"],["US H2",costH2(2050,"US",g,CUR),"#3d9be0"]];
+  const bmax=Math.max(...bars.map(b=>b[1]))*1.18,bw=120,gap=58;
+  bars.forEach((b,i)=>{const X=76+i*(bw+gap),h=b[1]/bmax*(H-52),Y=H-30-h;
+   a.fillStyle=b[2];a.fillRect(X,Y,bw,h);a.fillStyle="#e8ecf1";a.font="12.5px sans-serif";
+   a.fillText(b[1].toFixed(2)+" ct",X+bw/2-24,Y-6);a.fillText(b[0],X+bw/2-30,H-10);});
+  const dEU=costH2(2050,"EU",g,CUR)-costJet(2050,"EU",g,man);
+  $("aNote").textContent=`EU 2050: H2 ${dEU<0?"günstiger":"teurer"} um ${Math.abs(dEU).toFixed(2)} ct/ASK — aber adv zählt ALLE Betriebskosten (× f_share) MINUS Speed-Malus, über alle Jahre ab EIS.`;}
+}
+buildSliders();draw();
+</script></body></html>
