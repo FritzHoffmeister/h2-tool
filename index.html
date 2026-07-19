@@ -34,6 +34,7 @@
  .verdict{padding:10px 12px;border-radius:8px;font-weight:600;margin-bottom:12px;font-size:13.5px}
  .chip{display:inline-block;background:#1a2230;border:1px solid #2b3a52;color:#9fc1e8;border-radius:7px;padding:6px 10px;font-size:11.5px;margin-bottom:12px}
  footer{padding:12px 2px 8px;color:var(--mut);font-size:11px;border-top:1px solid #262c35;margin-top:4px}
+ #tt{position:fixed;pointer-events:none;background:#1a2230;border:1px solid #1f77b4;border-radius:6px;padding:6px 10px;font-size:11.5px;color:#e8ecf1;display:none;z-index:99;white-space:nowrap;line-height:1.5}
 </style></head><body>
 <header><h1>🛩️ H2-Brennstoffzellen-Flugzeug — Business Case (OEM), interaktiv · <span style="color:#7fb3e0">G3</span></h1>
 <div class="sub"><b>Ein-Welt-Rechner</b> auf der Mechanik der auditierten Modelle (model_v4 + v5): <b>fünf Cases</b> —
@@ -227,11 +228,11 @@ $("pOil").onclick=()=>setAll({mult:1.8});
 $("pPol").onclick=()=>setAll({v45:2052,u_co2:1,u_h2:0});
 
 function draw(){
- const g=gval();let out=0;
+ const g=gval();let out=0;LAST_G=g;
  for(const s of SPEC){const r=rowFor(s,CUR);if(!r)continue;const v=g[s[0]],inB=v>=r[4]-1e-9&&v<=r[5]+1e-9;
   $("V"+s[0]).textContent=s[3](v)+(inB?"":" ⚠");$("L"+s[0]).className=inB?"":"out";if(!inB)out++;}
  $("chainNote").textContent=`η-Kette FC×Motor/Prop aktuell: ${(g.eta_fc*g.eta_mp).toFixed(3)} (auditiert real 0,41–0,44)`;
- const r=run(g,CUR);
+ const r=run(g,CUR);LAST_R=r;
  const DEAD=CASEMETA[CUR].dead,isDead=r.gate<1e-9;
  DEAD.forEach(id=>{if($(id)){$("L"+id).style.opacity=isDead?".42":"1";$(id).style.opacity=isDead?".42":"1";}});
  $("deadNote").textContent=isDead
@@ -276,7 +277,7 @@ function draw(){
   D.forEach((v,i)=>{const X=sx(i),Y=sy(v);i?x.lineTo(X,Y):x.moveTo(X,Y);});x.stroke();
   x.fillStyle=r.npv>=0?"#27ae60":"#c0392b";x.fillText("NPV "+r.npv.toFixed(2),W-118,sy(D[D.length-1])-6);}
  // Kosten/ASK 2050
- {const man=CUR!=="A";
+ {const man=CUR.charAt(0)!=="A";
   $("cATitle").innerHTML="Kosten je Sitz-km 2050 [ct/ASK] — "+(man?"Blend (inkl. Quote+CO2)":"Kerosin OHNE Mandat (Kleinflugplatz)")+" vs. H2";
   const cv=$("cA"),a=cv.getContext("2d"),W=cv.width,H=cv.height;a.clearRect(0,0,W,H);
   const jl=man?"Blend":"Kerosin";
@@ -289,5 +290,26 @@ function draw(){
   const dEU=costH2(2050,"EU",g,CUR)-costJet(2050,"EU",g,man);
   $("aNote").textContent=`EU 2050: H2 ${dEU<0?"günstiger":"teurer"} um ${Math.abs(dEU).toFixed(2)} ct/ASK — aber adv zählt ALLE Betriebskosten (× f_share) MINUS Speed-Malus, über alle Jahre ab EIS.`;}
 }
+let LAST_R=null,LAST_G=null;
+const tt=document.createElement("div");tt.id="tt";document.body.appendChild(tt);
+function hook(id,fn){const cv=$(id);
+ cv.addEventListener("mousemove",e=>{if(!LAST_R)return;const rect=cv.getBoundingClientRect();
+  const X=(e.clientX-rect.left)*cv.width/rect.width;const h=fn(X,LAST_R,LAST_G);
+  if(h){tt.innerHTML=h;tt.style.display="block";tt.style.left=Math.min(e.clientX+14,innerWidth-250)+"px";tt.style.top=(e.clientY+12)+"px";}
+  else tt.style.display="none";});
+ cv.addEventListener("mouseleave",()=>tt.style.display="none");}
+hook("cAdv",(X,r,g)=>{const pad=44,W=840;const i=Math.round((X-pad)/(W-pad-12)*(r.advA.length-1));
+ if(i<0||i>=r.advA.length)return null;const y=g.eis+i;
+ return `<b>${y}</b><br>adv: ${(r.advA[i]*100).toFixed(2)} %<br>θ-Schwelle: ${(g.thr*100).toFixed(1)} %<br>zählt fürs Gate: ${(Math.max(0,r.advA[i])*100).toFixed(2)} %`;});
+hook("cJ",(X,r,g)=>{const pad=44,W=840;const i=Math.round((X-pad)/(W-pad-12)*(r.cumA.length-1));
+ if(i<0||i>=r.cumA.length)return null;const y=PC[CUR].ds+i;
+ return `<b>${y}</b><br>nominal: ${(r.cumA[i]/1000).toFixed(2)} Mrd<br>diskontiert: ${(r.dcumA[i]/1000).toFixed(2)} Mrd`;});
+hook("cA",(X,r,g)=>{const bw=120,gap=58;
+ const man=CUR.charAt(0)!=="A",jl=man?"Blend":"Kerosin";
+ const bars=[["EU "+jl,costJet(2050,"EU",g,man)],["EU H2",costH2(2050,"EU",g,CUR)],
+             ["US "+jl,costJet(2050,"US",g,man)],["US H2",costH2(2050,"US",g,CUR)]];
+ for(let i=0;i<4;i++){const x0=76+i*(bw+gap);if(X>=x0&&X<=x0+bw)
+  return `<b>${bars[i][0]} (2050)</b><br>${bars[i][1].toFixed(2)} ct/ASK`;}
+ return null;});
 buildSliders();draw();
 </script></body></html>
