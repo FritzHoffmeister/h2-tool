@@ -293,11 +293,15 @@ function draw(){
 let LAST_R=null,LAST_G=null;
 const tt=document.createElement("div");tt.id="tt";document.body.appendChild(tt);
 function hook(id,fn){const cv=$(id);
- cv.addEventListener("mousemove",e=>{if(!LAST_R)return;const rect=cv.getBoundingClientRect();
-  const X=(e.clientX-rect.left)*cv.width/rect.width;const h=fn(X,LAST_R,LAST_G);
-  if(h){tt.innerHTML=h;tt.style.display="block";tt.style.left=Math.min(e.clientX+14,innerWidth-250)+"px";tt.style.top=(e.clientY+12)+"px";}
-  else tt.style.display="none";});
- cv.addEventListener("mouseleave",()=>tt.style.display="none");}
+ const show=(cx,cy)=>{if(!LAST_R)return;const rect=cv.getBoundingClientRect();
+  const X=(cx-rect.left)*cv.width/rect.width;const h=fn(X,LAST_R,LAST_G);
+  if(h){tt.innerHTML=h;tt.style.display="block";tt.style.left=Math.min(cx+14,innerWidth-250)+"px";tt.style.top=Math.min(cy+12,innerHeight-90)+"px";}
+  else tt.style.display="none";};
+ cv.addEventListener("mousemove",e=>show(e.clientX,e.clientY));
+ cv.addEventListener("touchstart",e=>{const t0=e.touches[0];show(t0.clientX,t0.clientY);},{passive:true});
+ cv.addEventListener("touchmove",e=>{const t0=e.touches[0];show(t0.clientX,t0.clientY);e.preventDefault();},{passive:false});
+ cv.addEventListener("mouseleave",()=>tt.style.display="none");
+ cv.addEventListener("touchend",()=>setTimeout(()=>tt.style.display="none",1200));}
 hook("cAdv",(X,r,g)=>{const pad=44,W=840;const i=Math.round((X-pad)/(W-pad-12)*(r.advA.length-1));
  if(i<0||i>=r.advA.length)return null;const y=g.eis+i;
  return `<b>${y}</b><br>adv: ${(r.advA[i]*100).toFixed(2)} %<br>θ-Schwelle: ${(g.thr*100).toFixed(1)} %<br>zählt fürs Gate: ${(Math.max(0,r.advA[i])*100).toFixed(2)} %`;});
