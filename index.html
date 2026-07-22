@@ -185,6 +185,34 @@ const SPEC=[
  ["wacc","B","WACC (real!)",pct1,-1,{A:[.05,.12,.001,.078,.063,.103],B:"A",C:"A"}],
 ];
 function spec(id){return SPEC.find(s=>s[0]===id);}
+// Regler-Erklärungen (Hover/Tap auf ⓘ) — modellgenau, plain-language wie im PT6-Dashboard.
+const TIPS={
+ eta_fc:"Wirkungsgrad der Brennstoffzelle (H₂→Strom, netto inkl. parasitärer Kühl-/Luftlast). Auditiertes Band real 0,50–0,58. Zusammen mit η Motor/Propeller ergibt das die Tank-to-Thrust-Kette 0,41–0,44 — das Modell nutzt bis 0,48 als optimistische Kante.",
+ eta_mp:"Wirkungsgrad von E-Motor + Inverter + Propeller/Fan zusammen. Mal η_FC ergibt die Tank-to-Thrust-Effizienz. Höher = weniger H₂ je Sitz-km, aber kein Reichweiten-Wunder (Volumen bleibt bindend).",
+ fshare:"Anteil der Treibstoffkosten an den gesamten Betriebskosten (DOC). NUR dieser Anteil profitiert vom H₂-Preisvorteil — beim 19-Sitzer klein (~20–25 %), beim Jet größer (~30–45 %). Der Hebel, mit dem der Fuel-Vorteil auf die Gesamt-DOC durchschlägt.",
+ smalus:"Speed-Malus: Aufschlag, weil das H₂-Flugzeug langsamer fliegt (weniger Umläufe/Tag, mehr zeit-/kapitalgebundene Kosten je km). Case A ≈0 (Komparator ist selbst ein Prop), Case B/C scharf relevant (Prop/Ducted-Fan Mach 0,55 vs. Jet Mach 0,72).",
+ c_emalus:"Nur Case C: kleiner Energie-Malus des FC-Antriebs (Cooling-Drag + LH₂-Tankvolumen) gegenüber dem Jet, auditiert 1,05/1,12/1,20. >1 heißt, der FC braucht mehr Vortriebsenergie je Sitz-km.",
+ thr:"Gate-Schwelle θ: wie viel DOC-Vorteil eine Airline braucht, um voll auf H₂ umzusteigen. Darunter kauft der Markt nur anteilig (Gate<100 %). Band 2 % (aggressiv kostengetrieben) / 5 % (Base) / 8 % (hohe Wechselreibung).",
+ u_h2:"Position auf dem H₂- & e-SAF-Preispfad — der GEMEINSAME Strompreis-Regler: links günstiger grüner Strom, rechts teuer. Treibt H₂ und e-SAF zusammen (strukturelle Korrelation, Memo-Risiko 7).",
+ a_trailer:"Aufschlag für GH₂-Trailer-Logistik am Kleinflugplatz (🟡 Audit-Weichstelle). An unerschlossenen Plätzen >20 $/kg, im Skalenbetrieb deutlich darunter. Umgeht die LH₂-Großinfra. Nur Case A.",
+ u_jet:"Position auf dem Kerosinpfad: links günstig, rechts teuer. Der fossile Komparator, gegen den H₂ antritt — teureres Kerosin vergrößert den H₂-Vorteil.",
+ mult:"Öl-Schock-Multiplikator auf den Kerosinpreis (Stress-Ast O2; im MC ~6,5 % der Welten ×1,3–1,8). Verteuert den fossilen Komparator schlagartig — öffnet das Gate.",
+ u_co2:"Position auf dem CO₂-Preispfad (EU-ETS): links niedrig, rechts Fat-Tail (bis ~550 €/t 2050). Höher = fossiler Komparator teurer = H₂ relativ besser. Wirkt nur EU/UK (US=0).",
+ v45:"Auslaufjahr des US-Steuervorteils IRA-45V (bis 3,185 $/kg H₂, Fade über 3 J.). Später = länger günstiger US-H₂. Wirkt nur in der US-Region.",
+ dev:"Einmalige Entwicklungskosten bis zur Zulassung. SCOPE-getrieben, nicht PAX! A = Retrofit/STC (0,4–1,5), B/C = Clean-Sheet-H₂ mit novel propulsion (7–16 / 14–32 Mrd). Der C-Tail bleibt bewusst fett (First-of-a-Kind-Risiko, vgl. MRJ/C919).",
+ grant:"Staatliche F&E-Kofinanzierung (Clean Aviation/ATI/BMWK): senkt die effektive Dev-Last. Band 0–35 %. Wird EINMAL angewendet (nicht mit den Lean-Netto-Zahlen doppeln).",
+ eis:"Markteintrittsjahr (Entry into Service). Später = kürzere Absatzperiode + stärkere Diskontierung. Band nach hinten verschoben (ZeroAvia-Pivot + Erstzulassung eines Novel-Propulsion-Musters).",
+ price0:"Realer Verkaufspreis je Flugzeug (value-based aus Fuel/CO₂/Wartungs-Barwert, KEIN grünes Asset-Premium). Nicht bei Case C — dort läuft ein Margen-Modell statt Preis−Stückkosten.",
+ c_m0:"Nur Case C: Deckungsbeitrag je Flugzeug in den FOAK-Verlustjahren (negativ). Ramp-Modell statt Lernkurve (Audit F4 — die Lernkurve überstellte die Marge um 5–9×).",
+ c_m1:"Nur Case C: reife Marge je Flugzeug nach dem Hochlauf. Der Ramp läuft von m0 (Verlust) linear zu m1 über c_ramp Jahre.",
+ c_ramp:"Nur Case C: über wie viele Jahre die Marge von FOAK-Verlust (m0) auf reif (m1) hochläuft. Anker ~13 J. (A220-Empirie).",
+ mkt:"Adressierbares Segment-Neubauvolumen [Einheiten/Jahr], missions-gefiltert (nur H₂-machbare Kurzstrecken). Wirkt NUR bei offenem Gate — bei Gate 0 folgenlos.",
+ pen:"Gezogener Penetrations-Anteil des adressierbaren Markts. Wird mit dem Gate MULTIPLIZIERT — bei Gate 0 wirkungslos. Deckel je Case (25–45 %).",
+ cap:"Maximale Fertigungskapazität [Einheiten/Jahr] — deckelt den Absatz nach oben, egal wie gut Markt und Gate laufen.",
+ learn:"Wright-Lernrate: je Stückzahl-VERDOPPLUNG fallen die Kosten auf x %. Wirkt NUR auf den Airframe-Anteil (af_first·n^b), NICHT auf das FC-System — das folgt einem industrie-getriebenen Kalenderpfad (ihr seid dort Preisnehmer).",
+ u_fckw:"Position auf dem FC-System-Kostenpfad [$/kW]: links günstig, rechts teuer. INDUSTRIE-getrieben (HDV/Stationär/Elektrolyse-Volumen), NICHT an eure Stückzahl gekoppelt und unabhängig von der Lernrate gezogen. Nicht bei Case C.",
+ wacc:"Realer Kapitalkostensatz zum Abzinsen künftiger Cashflows. Audit: nahe Firmen-WACC ~7 %, weil das RISIKO schon in den Welt-Zuständen/Bändern steckt — nicht doppelt bestrafen.",
+};
 function rowFor(s,c){let r=s[5][c];if(r===undefined&&c.charAt(0)==="A")r=s[5]["A"];if(r==="A")r=s[5]["A"];return r;}   // "A" = wie Case A definiert
 const CASEMETA={
  A1:{tab:"tabA1",note:"6–8 PAX (PC-12/TBM-Klasse), GH₂, ohne Mandat. ⚠ Audit F1: dev-Band gilt NUR Retrofit-STC (CS-23) — Clean-Sheet-H₂ dieser Größe rutscht durch die FC-Masse in CS-25 (BYA-1: 9,6 t MTOW). dev ab 2027, Deckel 25 %.",
@@ -211,8 +239,9 @@ const CASEMETA={
 function buildSliders(){
  ["grpA","grpP","grpB"].forEach(g=>$(g).innerHTML="");
  for(const s of SPEC){const r=rowFor(s,CUR);if(!r)continue;
+  const tip=(TIPS[s[0]]||"").replace(/"/g,"&quot;");
   $("grp"+s[1]).insertAdjacentHTML("beforeend",
-   `<label id="L${s[0]}">${s[2]} <b id="V${s[0]}"></b></label><input type="range" id="${s[0]}" min="${r[0]}" max="${r[1]}" step="${r[2]}" value="${r[3]}">`);
+   `<label id="L${s[0]}" title="${tip}">${s[2]} ${tip?'<span style="color:#7fb3e0;cursor:help">ⓘ</span>':''} <b id="V${s[0]}"></b></label><input type="range" id="${s[0]}" title="${tip}" min="${r[0]}" max="${r[1]}" step="${r[2]}" value="${r[3]}">`);
   $(s[0]).addEventListener("input",draw);}
  $("caseNote").textContent=CASEMETA[CUR].note;
  $("mcChip").innerHTML=CASEMETA[CUR].chip;
